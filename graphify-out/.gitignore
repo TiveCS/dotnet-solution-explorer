@@ -1,0 +1,6 @@
+# Local machine state + caches — not portable
+.graphify_python
+.graphify_root
+.graphify_labels.json
+cache/
+manifest.json
