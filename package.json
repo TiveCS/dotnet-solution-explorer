@@ -1,0 +1,306 @@
+{
+  "name": "dotnet-solution-explorer",
+  "displayName": "Solution Explorer",
+  "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
+  "version": "0.1.0",
+  "publisher": "rehoukrel",
+  "license": "MIT",
+  "engines": { "vscode": "^1.67.0" },
+  "categories": ["Other"],
+  "activationEvents": ["workspaceContains:**/*.sln"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "solutionExplorerContainer",
+          "title": "Solution Explorer",
+          "icon": "images/solution-explorer.svg"
+        }
+      ]
+    },
+    "views": {
+      "solutionExplorerContainer": [
+        {
+          "id": "dotnetSolutionExplorer",
+          "name": "Solution Explorer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "solutionExplorer.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.openSln",
+        "title": "Open Solution File...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.addFile",
+        "title": "Add File...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.addFolder",
+        "title": "Add Folder...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.rename",
+        "title": "Rename",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.delete",
+        "title": "Delete",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.moveToProject",
+        "title": "Move to Project...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.removeFromSolution",
+        "title": "Remove from Solution",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.deleteProject",
+        "title": "Delete Project...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.revealActiveFile",
+        "title": "Reveal Active File in Tree",
+        "icon": "$(target)",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.toggleRevealActiveFile",
+        "title": "Toggle Auto-Reveal Active File",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.toggleExcludedFiles",
+        "title": "Toggle Excluded Files",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.openFile",
+        "title": "Open File",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.searchSymbol",
+        "title": "Search Symbol...",
+        "icon": "$(search)",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.openProjectFile",
+        "title": "Open .csproj",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.revealInOS",
+        "title": "Reveal in File Explorer",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.openInTerminal",
+        "title": "Open in Integrated Terminal",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.copyPath",
+        "title": "Copy Path",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.copyRelativePath",
+        "title": "Copy Relative Path",
+        "category": "Solution Explorer"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "solutionExplorer.searchSymbol",
+          "when": "view == dotnetSolutionExplorer",
+          "group": "navigation@0"
+        },
+        {
+          "command": "solutionExplorer.refresh",
+          "when": "view == dotnetSolutionExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "solutionExplorer.revealActiveFile",
+          "when": "view == dotnetSolutionExplorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "solutionExplorer.addFile",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "group": "1_add@1"
+        },
+        {
+          "command": "solutionExplorer.addFolder",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "group": "1_add@2"
+        },
+        {
+          "command": "solutionExplorer.rename",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(file|folder)/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "solutionExplorer.delete",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(file|folder)/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "solutionExplorer.moveToProject",
+          "when": "view == dotnetSolutionExplorer && viewItem == file",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "solutionExplorer.openProjectFile",
+          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "group": "3_project@1"
+        },
+        {
+          "command": "solutionExplorer.toggleExcludedFiles",
+          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "group": "3_project@2"
+        },
+        {
+          "command": "solutionExplorer.removeFromSolution",
+          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "group": "3_project@3"
+        },
+        {
+          "command": "solutionExplorer.deleteProject",
+          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "group": "3_project@4"
+        },
+        {
+          "command": "solutionExplorer.revealInOS",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "group": "4_shell@1"
+        },
+        {
+          "command": "solutionExplorer.openInTerminal",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder)/",
+          "group": "4_shell@2"
+        },
+        {
+          "command": "solutionExplorer.copyPath",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "solutionExplorer.copyRelativePath",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "group": "5_copy@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "solutionExplorer.delete",
+        "key": "delete",
+        "when": "focusedView == dotnetSolutionExplorer"
+      },
+      {
+        "command": "solutionExplorer.searchSymbol",
+        "key": "alt+p",
+        "when": "solutionExplorer.hasSolution"
+      }
+    ],
+    "configuration": {
+      "title": "Solution Explorer",
+      "properties": {
+        "solutionExplorer.namingConventions": {
+          "type": "array",
+          "default": [
+            { "pattern": "I*", "template": "Interface" },
+            { "pattern": "*Tests", "template": "Class" },
+            { "pattern": "*Test", "template": "Class" },
+            { "pattern": "*Enum", "template": "Enum" }
+          ],
+          "description": "Naming convention rules to auto-select file templates. Pattern supports * wildcard.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": { "type": "string" },
+              "template": { "type": "string" }
+            }
+          }
+        },
+        "solutionExplorer.defaultTemplate": {
+          "type": "string",
+          "default": "Class",
+          "description": "Default file template when no naming convention matches."
+        },
+        "solutionExplorer.namespaceStyle": {
+          "type": "string",
+          "enum": ["auto", "file-scoped", "block-scoped"],
+          "default": "auto",
+          "description": "Namespace declaration style. 'auto' reads from .editorconfig."
+        },
+        "solutionExplorer.customTemplatesPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to directory containing custom file templates (VS Code snippet syntax)."
+        },
+        "solutionExplorer.autoRevealActiveFile": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically reveal active editor file in solution tree."
+        },
+        "solutionExplorer.symbolProvider": {
+          "type": "string",
+          "enum": ["regex", "languageServer"],
+          "enumDescriptions": [
+            "Lightweight regex scan. Zero language-server dependency (default).",
+            "Use VS Code's workspace symbol provider (requires the C# extension). Not yet implemented — falls back to regex."
+          ],
+          "default": "regex",
+          "description": "Strategy used to extract symbols for Search Symbol (Alt+P)."
+        },
+        "solutionExplorer.symbolSearch.livePreview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Live-preview each result as you navigate the Search Symbol list. Disable on low-spec machines — only Enter will open and jump."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "test": "esbuild test/regex.test.ts --bundle --platform=node --outfile=out/regex.test.js && node out/regex.test.js",
+    "package": "vsce package",
+    "vscode:prepublish": "node esbuild.js --production"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.3.0",
+    "minimatch": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/minimatch": "^5.1.2",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.67.0",
+    "@vscode/vsce": "^2.0.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
