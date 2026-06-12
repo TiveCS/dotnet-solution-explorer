@@ -10,6 +10,7 @@
   "homepage": "https://github.com/TiveCS/dotnet-solution-explorer#readme",
   "engines": { "vscode": "^1.67.0" },
   "categories": ["Other"],
+  "keywords": ["dotnet", "csharp", "solution", "sln", "csproj", "explorer", "visual studio"],
   "icon": "images/icon.png",
   "activationEvents": ["workspaceContains:**/*.sln"],
   "main": "./out/extension.js",
@@ -296,11 +297,9 @@
     "vscode:prepublish": "node esbuild.js --production"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.3.0",
-    "minimatch": "^9.0.0"
+    "fast-xml-parser": "^4.3.0"
   },
   "devDependencies": {
-    "@types/minimatch": "^5.1.2",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.67.0",
     "@vscode/vsce": "^2.0.0",
