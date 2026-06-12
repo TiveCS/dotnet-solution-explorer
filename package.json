@@ -3,7 +3,7 @@
   "displayName": "Solution Explorer",
   "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
   "version": "0.1.0",
-  "publisher": "rehoukrel",
+  "publisher": "RehoukrelStudio",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TiveCS/dotnet-solution-explorer.git" },
   "bugs": { "url": "https://github.com/TiveCS/dotnet-solution-explorer/issues" },
