@@ -10,6 +10,7 @@
   "homepage": "https://github.com/TiveCS/dotnet-solution-explorer#readme",
   "engines": { "vscode": "^1.67.0" },
   "categories": ["Other"],
+  "icon": "images/icon.png",
   "activationEvents": ["workspaceContains:**/*.sln"],
   "main": "./out/extension.js",
   "contributes": {
