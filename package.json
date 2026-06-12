@@ -1,5 +1,5 @@
 {
-  "name": "dotnet-solution-explorer-lite",
+  "name": "dotnet-solution-tree",
   "displayName": "Solution Explorer",
   "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
   "version": "0.1.0",
