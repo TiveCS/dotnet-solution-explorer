@@ -63,8 +63,18 @@ _Avoid_: scanner, parser (when referring to the strategy abstraction)
 The user-facing action (default keybinding Alt+P, Ctrl+P-style QuickPick) that fuzzy-matches a typed query against the Symbol Index, live-previews each candidate's location as the user navigates, and on accept opens the file with the cursor on the Symbol's name.
 _Avoid_: go to symbol, find type
 
+**Pinned Project**:
+A Project the user has marked for quick access. Pinned Projects appear in a collapsible **Pin Board** section at the top of the tree, above the Solution node. Pins are personal (not stored in the repo) and scoped to the active solution. A Project that is removed from the solution silently loses its pin.
+_Avoid_: bookmark, favourite, starred project
+
+**Pin Board**:
+A collapsible group node rendered at the top of the tree that contains all Pinned Projects for the active solution. When empty, the Pin Board is not shown.
+_Avoid_: pinned section, favourites panel
+
 ## Relationships
 
+- A **Pin Board** contains zero or more **Pinned Projects** for the active solution
+- A **Pinned Project** is always a mirror of a **Project** in the loaded solution — it cannot outlive its source Project
 - A **Solution** contains zero or more **Solution Folders** and zero or more **Projects**
 - A **Solution Folder** can contain other **Solution Folders** and **Projects**
 - A **Project** is either **SDK-style** or **Legacy** — never both
@@ -92,6 +102,13 @@ _Avoid_: go to symbol, find type
 - **Move (file/folder)**: drag-and-drop or right-click → "Move to Project"; updates `.csproj` for legacy projects; auto-updates namespace in moved files
 - **Remove Project from Solution**: removes `.sln` reference only; files untouched
 - **Delete Project**: confirmation dialog; default = remove from solution only; opt-in = also delete files (Rider pattern)
+
+### Pin Board
+- Right-click any **Project** → "Pin to Top" adds it to the **Pin Board**; "Unpin" removes it
+- **Pin Board** renders as a collapsible group node at the very top of the tree, above the Solution node
+- Each **Pinned Project** is a fully interactive Project node — expandable to Folders and File Nodes, all context menu actions available
+- When the active solution changes or a pinned Project is no longer in the solution, that pin is silently dropped
+- An empty Pin Board is not shown
 
 ### Reveal in tree
 - Manual only (command/button); auto-tracking is OFF by default; toggleable in settings

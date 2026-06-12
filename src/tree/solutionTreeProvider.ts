@@ -5,9 +5,10 @@ import { ProjectData, parseProjectFile } from '../parser/csprojParser';
 import { buildFolderTree, FolderTree, resolveFromDir } from '../utils/pathUtils';
 import {
   TreeNode, NodeKind,
-  SolutionNode, SolutionFolderNode, ProjectNode, FolderNode, FileNode,
+  PinBoardNode, SolutionNode, SolutionFolderNode, ProjectNode, FolderNode, FileNode,
   nodeId,
 } from './nodes';
+import { PinStore } from './pinStore';
 
 export class SolutionTreeProvider
   implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
@@ -21,8 +22,11 @@ export class SolutionTreeProvider
   private slnData: SlnData | null = null;
   private projectCache = new Map<string, ProjectData>();
   private showExcludedSet = new Set<string>();
+  readonly pins: PinStore;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.pins = new PinStore(context.globalState);
+  }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -57,15 +61,20 @@ export class SolutionTreeProvider
   async getAllIndexableFiles(): Promise<{ filePath: string; project?: string }[]> {
     if (!this.slnData) return [];
     const out: { filePath: string; project?: string }[] = [];
+    const seen = new Set<string>();
     for (const [, proj] of this.slnData.projects) {
       if (proj.isSolutionFolder) continue;
       const projectPath = resolveFromDir(proj.relativePath, this.slnData.slnDir);
+      const ext = path.extname(projectPath).toLowerCase();
+      if (ext !== '.csproj' && ext !== '.fsproj' && ext !== '.vbproj') continue;
       let data = this.projectCache.get(projectPath);
       if (!data) {
         data = await parseProjectFile(projectPath);
         this.projectCache.set(projectPath, data);
       }
       for (const f of data.files) {
+        if (seen.has(f)) continue;
+        seen.add(f);
         out.push({ filePath: f, project: proj.name });
       }
     }
@@ -97,6 +106,7 @@ export class SolutionTreeProvider
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
     switch (node.kind) {
+      case NodeKind.PinBoard: return this.buildPinBoardItem(node);
       case NodeKind.Solution: return this.buildSolutionItem(node);
       case NodeKind.SolutionFolder: return this.buildSolutionFolderItem(node);
       case NodeKind.Project: return this.buildProjectItem(node);
@@ -110,10 +120,18 @@ export class SolutionTreeProvider
 
     if (!node) {
       const solutionNode: SolutionNode = { kind: NodeKind.Solution, slnData: this.slnData };
+      const pins = this.pins.getPins(this.slnData.slnPath);
+      const validPins = [...pins].filter(guid => this.slnData!.projects.has(guid));
+      if (validPins.length > 0) {
+        const pinBoard: PinBoardNode = { kind: NodeKind.PinBoard, slnPath: this.slnData.slnPath };
+        return [pinBoard, solutionNode];
+      }
       return [solutionNode];
     }
 
     switch (node.kind) {
+      case NodeKind.PinBoard:
+        return this.getPinBoardChildren(node);
       case NodeKind.Solution:
         return this.getSlnChildren(node.slnData, undefined);
       case NodeKind.SolutionFolder:
@@ -141,11 +159,12 @@ export class SolutionTreeProvider
   // ── Drag and Drop ─────────────────────────────────────────────────────────
 
   handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {
-    const fileNodes = source.filter((n): n is FileNode => n.kind === NodeKind.File);
-    if (fileNodes.length > 0) {
+    const files = source.filter((n): n is FileNode => n.kind === NodeKind.File).map(n => n.filePath);
+    const folders = source.filter((n): n is FolderNode => n.kind === NodeKind.Folder).map(n => n.folderPath);
+    if (files.length > 0 || folders.length > 0) {
       dataTransfer.set(
         'application/vnd.code.tree.solutionexplorer',
-        new vscode.DataTransferItem(fileNodes.map(n => n.filePath))
+        new vscode.DataTransferItem({ files, folders })
       );
     }
   }
@@ -155,7 +174,10 @@ export class SolutionTreeProvider
     const item = dataTransfer.get('application/vnd.code.tree.solutionexplorer');
     if (!item) return;
 
-    const filePaths: string[] = item.value;
+    const payload = item.value as { files?: string[]; folders?: string[] };
+    const filePaths: string[] = payload.files ?? [];
+    const folderPaths: string[] = payload.folders ?? [];
+
     let targetProjectNode: ProjectNode | undefined;
     let targetDir: string | undefined;
 
@@ -171,13 +193,38 @@ export class SolutionTreeProvider
 
     if (!targetDir || !targetProjectNode) return;
 
-    const { executeMoveFiles } = await import('../operations/moveOperation');
+    const { executeMoveFile, executeMoveFolder } = await import('../operations/moveOperation');
     for (const filePath of filePaths) {
-      await executeMoveFiles(filePath, targetDir, targetProjectNode, this);
+      await executeMoveFile(filePath, targetDir, targetProjectNode, this);
+    }
+    for (const folderPath of folderPaths) {
+      await executeMoveFolder(folderPath, targetDir, targetProjectNode, this);
     }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  private getPinBoardChildren(node: PinBoardNode): TreeNode[] {
+    if (!this.slnData) return [];
+    const pins = this.pins.getPins(node.slnPath);
+    const result: TreeNode[] = [];
+    for (const guid of pins) {
+      const p = this.slnData.projects.get(guid);
+      if (!p || p.isSolutionFolder) continue;
+      const projectPath = resolveFromDir(p.relativePath, this.slnData.slnDir);
+      const projectData = this.projectCache.get(projectPath);
+      result.push({
+        kind: NodeKind.Project,
+        guid,
+        name: p.name,
+        projectPath,
+        projectData,
+        showExcluded: this.showExcludedSet.has(projectPath),
+        pinned: true,
+      } as ProjectNode);
+    }
+    return result;
+  }
 
   private getSlnChildren(slnData: SlnData, parentGuid: string | undefined): TreeNode[] {
     const guids = parentGuid
@@ -254,6 +301,14 @@ export class SolutionTreeProvider
     return [...folders, ...files];
   }
 
+  private buildPinBoardItem(_node: PinBoardNode): vscode.TreeItem {
+    const item = new vscode.TreeItem('Pinned', vscode.TreeItemCollapsibleState.Expanded);
+    item.contextValue = 'pinBoard';
+    item.iconPath = new vscode.ThemeIcon('pin');
+    item.id = '__pinboard__';
+    return item;
+  }
+
   private buildSolutionItem(node: SolutionNode): vscode.TreeItem {
     const item = new vscode.TreeItem(node.slnData.solutionName, vscode.TreeItemCollapsibleState.Expanded);
     item.contextValue = 'solution';
@@ -272,7 +327,10 @@ export class SolutionTreeProvider
 
   private buildProjectItem(node: ProjectNode): vscode.TreeItem {
     const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.Collapsed);
-    item.contextValue = 'project';
+    const isPinned = node.pinned || (this.slnData
+      ? this.pins.isPinned(this.slnData.slnPath, node.guid)
+      : false);
+    item.contextValue = isPinned ? 'pinnedProject' : 'project';
     item.iconPath = new vscode.ThemeIcon('project');
     item.description = path.extname(node.projectPath).slice(1);
     item.tooltip = node.projectPath;

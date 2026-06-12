@@ -5,7 +5,7 @@ import { parseSlnFile } from './parser/slnParser';
 import { SolutionTreeProvider } from './tree/solutionTreeProvider';
 import { NodeKind, ProjectNode, FolderNode, FileNode } from './tree/nodes';
 import { addFile, addFolder, deleteNode, renameNode } from './operations/fileOperations';
-import { moveFileCommand } from './operations/moveOperation';
+import { moveBatchCommand } from './operations/moveOperation';
 import { removeProjectFromSolution, deleteProject } from './operations/projectOperations';
 import {
   openProjectFile, revealInOS, openInTerminal, copyPath, copyRelativePath,
@@ -19,7 +19,7 @@ let symbolIndex: SymbolIndex;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   provider = new SolutionTreeProvider(context);
-  symbolIndex = new SymbolIndex(() => provider.getAllIndexableFiles());
+  symbolIndex = new SymbolIndex(() => provider.getAllIndexableFiles(), undefined, context.globalStorageUri);
 
   treeView = vscode.window.createTreeView('dotnetSolutionExplorer', {
     treeDataProvider: provider,
@@ -168,19 +168,44 @@ function registerCommands(context: vscode.ExtensionContext): void {
   });
 
   reg('solutionExplorer.rename', async (node: unknown) => {
-    if (!isFileOrFolder(node)) return;
-    await renameNode(node, provider);
+    const target = isFileOrFolder(node) ? node : treeView.selection.find(isFileOrFolder);
+    if (!target) return;
+    await renameNode(target, provider);
   });
 
-  reg('solutionExplorer.delete', async (node: unknown) => {
+  reg('solutionExplorer.delete', async (...args: unknown[]) => {
+    const [node, rawAll] = args;
     const target = node ?? treeView.selection[0];
     if (!isFileOrFolder(target)) return;
-    await deleteNode(target, provider);
+    const fromArg = Array.isArray(rawAll) ? rawAll.filter(isFileOrFolder) : [];
+    // Keyboard shortcut omits the second arg — fall back to treeView.selection
+    const batch = fromArg.length > 0 ? fromArg : treeView.selection.filter(isFileOrFolder);
+    await deleteNode(target, provider, batch.length > 0 ? batch : undefined);
   });
 
-  reg('solutionExplorer.moveToProject', async (node: unknown) => {
-    if (!isFileNode(node)) return;
-    await moveFileCommand(node, provider);
+  reg('solutionExplorer.moveToProject', async (...args: unknown[]) => {
+    const [node, rawAll] = args;
+    const primary = isFileOrFolder(node) ? node : undefined;
+    if (!primary) return;
+    const fromArg = Array.isArray(rawAll) ? rawAll.filter(isFileOrFolder) : [];
+    const batch = fromArg.length > 0 ? fromArg : treeView.selection.filter(isFileOrFolder);
+    await moveBatchCommand(batch.length > 0 ? batch : [primary], provider);
+  });
+
+  reg('solutionExplorer.pinProject', async (node: unknown) => {
+    if (!isProjectNode(node)) return;
+    const slnData = provider.getSlnData();
+    if (!slnData) return;
+    await provider.pins.pin(slnData.slnPath, node.guid);
+    provider.refresh();
+  });
+
+  reg('solutionExplorer.unpinProject', async (node: unknown) => {
+    if (!isProjectNode(node)) return;
+    const slnData = provider.getSlnData();
+    if (!slnData) return;
+    await provider.pins.unpin(slnData.slnPath, node.guid);
+    provider.refresh();
   });
 
   reg('solutionExplorer.removeFromSolution', async (node: unknown) => {

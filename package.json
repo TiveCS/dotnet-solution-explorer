@@ -2,7 +2,7 @@
   "name": "csharp-solution-explorer",
   "displayName": "Rehoukrel Solution Explorer",
   "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "RehoukrelStudio",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TiveCS/dotnet-solution-explorer.git" },
@@ -67,6 +67,16 @@
       {
         "command": "solutionExplorer.moveToProject",
         "title": "Move to Project...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.pinProject",
+        "title": "Pin to Top",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.unpinProject",
+        "title": "Unpin",
         "category": "Solution Explorer"
       },
       {
@@ -153,12 +163,12 @@
       "view/item/context": [
         {
           "command": "solutionExplorer.addFile",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
           "group": "1_add@1"
         },
         {
           "command": "solutionExplorer.addFolder",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
           "group": "1_add@2"
         },
         {
@@ -173,47 +183,57 @@
         },
         {
           "command": "solutionExplorer.moveToProject",
-          "when": "view == dotnetSolutionExplorer && viewItem == file",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(file|folder)/",
           "group": "2_edit@3"
         },
         {
           "command": "solutionExplorer.openProjectFile",
-          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@1"
         },
         {
           "command": "solutionExplorer.toggleExcludedFiles",
-          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@2"
         },
         {
-          "command": "solutionExplorer.removeFromSolution",
+          "command": "solutionExplorer.pinProject",
           "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "group": "3_project@1"
+        },
+        {
+          "command": "solutionExplorer.unpinProject",
+          "when": "view == dotnetSolutionExplorer && viewItem == pinnedProject",
+          "group": "3_project@1"
+        },
+        {
+          "command": "solutionExplorer.removeFromSolution",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@3"
         },
         {
           "command": "solutionExplorer.deleteProject",
-          "when": "view == dotnetSolutionExplorer && viewItem == project",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@4"
         },
         {
           "command": "solutionExplorer.revealInOS",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
           "group": "4_shell@1"
         },
         {
           "command": "solutionExplorer.openInTerminal",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder)/",
           "group": "4_shell@2"
         },
         {
           "command": "solutionExplorer.copyPath",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
           "group": "5_copy@1"
         },
         {
           "command": "solutionExplorer.copyRelativePath",
-          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|folder|file)/",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
           "group": "5_copy@2"
         }
       ]
@@ -222,6 +242,11 @@
       {
         "command": "solutionExplorer.delete",
         "key": "delete",
+        "when": "focusedView == dotnetSolutionExplorer"
+      },
+      {
+        "command": "solutionExplorer.rename",
+        "key": "f2",
         "when": "focusedView == dotnetSolutionExplorer"
       },
       {

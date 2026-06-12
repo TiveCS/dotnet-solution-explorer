@@ -114,10 +114,19 @@ export async function addFolder(
 
 export async function deleteNode(
   node: FileNode | FolderNode,
-  provider: SolutionTreeProvider
+  provider: SolutionTreeProvider,
+  allNodes?: (FileNode | FolderNode)[],
 ): Promise<void> {
-  const isFile = node.kind === NodeKind.File;
-  const label = isFile ? node.name : `folder "${node.name}" and all contents`;
+  const nodes = allNodes && allNodes.length > 0 ? allNodes : [node];
+
+  let label: string;
+  if (nodes.length === 1) {
+    const n = nodes[0];
+    label = n.kind === NodeKind.File ? n.name : `folder "${n.name}" and all contents`;
+  } else {
+    label = `${nodes.length} items`;
+  }
+
   const confirm = await vscode.window.showWarningMessage(
     `Delete ${label}?`,
     { modal: true },
@@ -125,14 +134,32 @@ export async function deleteNode(
   );
   if (confirm !== 'Move to Trash') return;
 
-  const uri = vscode.Uri.file(isFile ? node.filePath : node.folderPath);
-
-  if (isFile && !node.project.projectData?.isSDKStyle) {
-    await removeFileFromCsproj(node.project.projectPath, node.filePath);
+  // Group legacy-project files by project to batch csproj edits
+  const legacyFilesByProject = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (n.kind === NodeKind.File && !n.project.projectData?.isSDKStyle) {
+      const arr = legacyFilesByProject.get(n.project.projectPath) ?? [];
+      arr.push(n.filePath);
+      legacyFilesByProject.set(n.project.projectPath, arr);
+    }
+  }
+  for (const [projectPath, filePaths] of legacyFilesByProject) {
+    for (const filePath of filePaths) {
+      await removeFileFromCsproj(projectPath, filePath);
+    }
   }
 
-  await vscode.workspace.fs.delete(uri, { recursive: !isFile, useTrash: true });
-  provider.invalidateProject(node.project.projectPath);
+  const invalidated = new Set<string>();
+  await Promise.all(nodes.map(async n => {
+    const isFile = n.kind === NodeKind.File;
+    const uri = vscode.Uri.file(isFile ? n.filePath : n.folderPath);
+    await vscode.workspace.fs.delete(uri, { recursive: !isFile, useTrash: true });
+    invalidated.add(n.project.projectPath);
+  }));
+
+  for (const projectPath of invalidated) {
+    provider.invalidateProject(projectPath);
+  }
 }
 
 export async function renameNode(
@@ -143,9 +170,11 @@ export async function renameNode(
   const oldPath = isFile ? node.filePath : node.folderPath;
   const oldName = node.name;
 
+  const ext = isFile ? path.extname(oldName) : '';
   const newName = await vscode.window.showInputBox({
     title: 'Rename',
     value: oldName,
+    valueSelection: [0, oldName.length - ext.length],
     prompt: 'Enter new name',
     validateInput: v => (!v.trim() ? 'Name required' : v.trim() === oldName ? 'Same name' : null),
   });
