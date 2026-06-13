@@ -39,10 +39,22 @@ A file that exists on disk inside a project directory but is excluded from the p
 The namespace prefix for a project, sourced from `<RootNamespace>` in the `.csproj`. Combined with folder-relative path to infer namespaces for new and moved files.
 
 **File Template**:
-A named scaffold for new files. Built-in templates: Class, Interface, Record, Enum, Razor Component, Razor Page (`.razor`), Razor Page with code-behind (`.razor.cs`), Razor View (`.cshtml`), Razor PageModel (`.cshtml.cs`), Blank. User-defined templates use VS Code snippet syntax.
+A named scaffold for new files. Built-in templates: Class, Interface, Record, Enum, Razor Component, Razor Page (`.razor`), Razor Page with code-behind (`.razor.cs`), Razor View (`.cshtml`), Razor PageModel (`.cshtml.cs`), Blank.
+
+**Custom Template**:
+A user-authored template stored as a **folder** (one folder = one template) containing one or more output files. Each output file's name may carry **Slot** tokens (e.g. `${NAME}Command.cs`); its body carries Slot tokens and may use VS Code snippet syntax (tab stops, choices, built-in variables). Stored personally in the extension's global storage now; a repo-shareable workspace folder is a future second source merged on top. For 0.1.2 a template emits exactly one file, but the folder format imposes no limit — multi-file is a future addition with no format change.
+_Avoid_: snippet, scaffold (when meaning the format), boilerplate
+
+**Slot**:
+A named placeholder filled when a template is scaffolded. `$NAMESPACE` (auto-inferred) and `${NAME}` (the input **stem**, composable as `${NAME}Command`) are pre-resolved by the extension; the result is then inserted via the VS Code snippet engine, so native snippet features also resolve (`$TM_FILENAME_BASE`, tab stops `${1:T}`, choices, `$CURRENT_YEAR`). Cursor lands on the first tab stop.
+_Avoid_: variable, token, field, placeholder (pick "Slot")
+
+**Stem**:
+The variable name a user types in "Add File" — the meaningful part a template composes identifiers and the output filename from. Typing `Approve` + template **Command** yields stem `Approve`. For single-name templates the stem is the whole typed name (e.g. built-in **Class**: `Approve` → `Approve.cs`).
+_Avoid_: base name, root name
 
 **Naming Convention Rule**:
-A user-configurable mapping from filename pattern to template. Example: `I*` → Interface template. Applied automatically during "Add File" to pre-select the matching template.
+A mapping from filename pattern to a template, applied during "Add File" to pre-select the matching template and recover the **Stem** from the typed name. Two sources: the user-configurable `namingConventions` setting (e.g. `I*` → Interface) and the **filename pattern of every Custom Template** (e.g. a template whose file is `${NAME}Command.cs` auto-registers `^(.+)Command$` → that template, capturing the stem). Both coexist.
 
 **Lazy Display / Eager Parse**:
 The loading strategy: render the solution tree immediately from `.sln` (< 10ms), then parse all `.csproj` files in the background. Project file lists appear instantly when expanded because parsing is already complete.
@@ -62,6 +74,10 @@ _Avoid_: scanner, parser (when referring to the strategy abstraction)
 **Symbol Search**:
 The user-facing action (default keybinding Alt+P, Ctrl+P-style QuickPick) that fuzzy-matches a typed query against the Symbol Index, live-previews each candidate's location as the user navigates, and on accept opens the file with the cursor on the Symbol's name.
 _Avoid_: go to symbol, find type
+
+**Search Scope**:
+The set of Projects whose Symbols are included in the Symbol Index (and therefore in Symbol Search). Default: every Project. A Project can be excluded via a per-project tree toggle, persisted per-solution by GUID (PinStore-style). Excluded Projects are never indexed; toggling updates the index incrementally — include adds a Project's files, exclude removes them.
+_Avoid_: filter, search filter, included projects
 
 **Pinned Project**:
 A Project the user has marked for quick access. Pinned Projects appear in a collapsible **Pin Board** section at the top of the tree, above the Solution node. Pins are personal (not stored in the repo) and scoped to the active solution. A Project that is removed from the solution silently loses its pin.
@@ -89,7 +105,9 @@ _Avoid_: pinned section, favourites panel
 ## Behaviours
 
 ### Tree loading
-- Auto-detect `.sln` in workspace; prompt via quick-pick if multiple found
+- Auto-detect `.sln` in workspace; exactly one found loads silently; quick-pick if multiple found
+- When **zero** `.sln` are detected, never auto-pop a file dialog. Render a **Welcome View** instead — a dead-end-free entry point
+- **Welcome View** offers two actions: "Open Solution File…" (native picker filtered to `.sln`, loads directly) and "Open Folder…" (pick any directory, recursively scanned for `.sln` using the standard obj/bin/node_modules exclusion set — 0 found shows a message, 1 loads, many show the quick-pick). "Open Folder…" scans only; it does **not** add the directory as a workspace root
 - Show solution structure immediately; parse project contents in background
 - Watch only `.sln` and `.csproj` files for changes; manual refresh button as escape hatch
 - No dependency on C# Dev Tools, OmniSharp, or any language server
@@ -102,6 +120,20 @@ _Avoid_: pinned section, favourites panel
 - **Move (file/folder)**: drag-and-drop or right-click → "Move to Project"; updates `.csproj` for legacy projects; auto-updates namespace in moved files
 - **Remove Project from Solution**: removes `.sln` reference only; files untouched
 - **Delete Project**: confirmation dialog; default = remove from solution only; opt-in = also delete files (Rider pattern)
+- **Rename Project**: deferred — renaming a project on disk while the .NET tooling holds `bin`/`obj` proved too unstable on Windows (directory-rename `EPERM`), so it is intentionally not shipped. Re-add an orphaned/renamed project via **Add Existing Project**
+- **Keyboard parity**: `F2` and `Del` dispatch by node kind so the tree behaves like a regular file tree — File/Folder use disk rename/delete (batch for delete), Solution Folder uses its `.sln` rename/remove, Project uses Delete Project on `Del` (no `F2` rename for projects). After a New Project, the project is revealed (ancestors expanded) so it is never hidden under a collapsed Solution Folder
+
+### Solution Folder operations
+- **New Solution Folder**: right-click the **Solution** root (creates at root) or an existing **Solution Folder** (creates nested). Prompts for a name; rejects empty and names duplicating a sibling folder. Generates a fresh GUID and inserts the `.sln` entry; nested creation also writes a `NestedProjects` parent link. Purely virtual — no directory is created on disk
+- **Rename Solution Folder**: edits the `.sln` only. A solution-folder entry carries its name in both the name and path fields of the `Project(...)` line — both are rewritten
+- **Delete Solution Folder**: cascade-removes the folder and every descendant (nested folders + projects) from the `.sln`, matching Visual Studio. Projects are un-referenced only; their files are never deleted. Modal confirmation states how many projects will be removed. Consistent with **Remove from Solution** (`.sln` edit only)
+- **Reparent** (Move to Solution Folder): a **Project** or **Solution Folder** can be moved between solution folders (or to root) via right-click "Move to Solution Folder…" (quick-pick of folders + "(root)") or by drag-and-drop onto a **Solution Folder** / **Solution** root. Rewrites the `NestedProjects` link only — no files move on disk
+- `.sln` writes use targeted string-surgery (insert/edit only the affected lines), preserving the rest of the file byte-for-byte — never a full re-serialize (see ADR)
+
+### Project lifecycle operations
+- **Add Existing Project**: right-click the **Solution** root or a **Solution Folder** → pick a `.csproj`/`.fsproj`/`.vbproj` already on disk → insert a `Project(...)` entry with the language-appropriate type GUID, path stored relative to the `.sln` dir. If invoked on a Solution Folder, nest it there. Rejects a project already referenced. No SDK required
+- **New Project**: scaffolds via `dotnet new` (see ADR). Flow: choose template → name → location. Templates are discovered by running `dotnet new list` (parsed by the `----` separator row, `DOTNET_CLI_UI_LANGUAGE=en`, cached per session). No target-framework prompt — the installed SDK's default TFM is used. Default output dir is the deepest **real** directory matching the solution-folder chain: descend into a folder segment only when a directory of that name actually exists on disk, and stop at the first virtual segment (so a project under purely-virtual folders defaults to the solution root). Always shown **editable**. Runs `dotnet new <shortname> -n <name> -o <dir>` with a progress notification, then adds the produced project to the `.sln` (nested under the invoking Solution Folder). After completion: refresh and reveal the new project node; no file is auto-opened
+- **New Project** requires the .NET SDK on `PATH` (detected via `dotnet --version`); when absent, it shows an actionable error. The explorer's load/parse path never invokes `dotnet` — it runs only during these explicit user actions, so the lightweight load/idle promise is unaffected
 
 ### Pin Board
 - Right-click any **Project** → "Pin to Top" adds it to the **Pin Board**; "Unpin" removes it
@@ -127,11 +159,15 @@ _Avoid_: pinned section, favourites panel
 - One QuickPick entry per Symbol (not per file); label = kind icon + type name, description = relative path, detail = project
 - Live preview on navigate (`onDidChangeActiveItem`, preserveFocus); Enter opens non-preview and centres cursor on the type name; Escape restores the prior editor
 - Live preview is **configurable** (default ON). When disabled, navigating the list does nothing; only Enter opens + jumps — cheaper for low-spec machines
-- Scope = whole solution, reusing the existing obj/bin/.git exclusion set; only files in the project model are indexed
+- Scope = whole solution by default, reusing the existing obj/bin/.git exclusion set; only files in the project model are indexed
+- **Search Scope** is user-narrowable: right-click a Project → "Include in / Exclude from Symbol Search" (default included), plus a "Set Search Scope…" multi-select quick-pick to flip many at once. Stored per-solution by GUID. Excluded Projects are skipped at index-build time; mid-session toggles update the index incrementally (exclude → remove that project's files; include → index them, a disk-cache hit if seen before) — never a full rebuild
 
 ### Custom templates
-- User defines template files using VS Code snippet syntax
-- Variables: `$TM_FILENAME_BASE`, `${1:ClassName}`, namespace injected as snippet variable
+- A **Custom Template** is a folder (one folder = one template). Folder name = label; each file's name is both its output pattern and an auto-registered **Naming Convention Rule**. For 0.1.2 a template emits one file; the folder format extends to multiple files later with no format change
+- **Storage**: personal templates live in the extension's global storage (not committed). A repo-shareable workspace folder is a planned second source, merged on top (repo overrides personal by id)
+- **Slot substitution (hybrid)**: `$NAMESPACE` and `${NAME}` (the stem, composable) are pre-resolved by string replace; the namespace-style transform (file-scoped vs block) is applied; then the body is inserted via the VS Code snippet engine so `$TM_FILENAME_BASE`, tab stops, choices, and built-in variables resolve natively and the cursor lands on the first tab stop (see ADR)
+- **Add File flow**: user types a **Stem**; the chosen template's filename pattern derives the actual file name (`${NAME}Command.cs` → `ApproveCommand.cs`). Typing a full name that matches a template's pattern auto-recommends that template and recovers the stem (mirrors `I*` → Interface)
+- **Authoring commands**: "Save as Template" (right-click an existing file → prompts for the stem substring, replaces its occurrences with `${NAME}` and the detected namespace with `$NAMESPACE`, derives the filename pattern, saves to global storage); "New Template" (blank starter folder pre-seeded with slot tokens, opened for editing); "Manage Templates" (opens the global templates folder)
 
 ## Configurable settings
 - Naming convention → template rules (default set provided, user-extensible)
@@ -147,6 +183,8 @@ _Avoid_: pinned section, favourites panel
 
 - "folder" was used to mean both a real directory and a VS virtual Solution Folder — resolved: **Folder** = real directory node under a Project; **Solution Folder** = virtual grouping node in the solution.
 - "delete project" vs "remove project" — resolved: **Remove from Solution** = `.sln` edit only (default); **Delete Project** = files also deleted (opt-in confirmation).
+- "drag and drop" now carries two meanings — resolved: dragging a **File**/**Folder** = disk move between Projects (existing); dragging a **Project**/**Solution Folder** onto a **Solution Folder** or **Solution** root = `.sln` reparent (NestedProjects rewrite, no files move). `handleDrop` branches on payload type.
+- "solution folders are virtual (no disk dir)" vs **New Project** defaulting its disk path to the solution-folder hierarchy — resolved: the default descends only through solution-folder segments that have a **matching real directory**; the first virtual segment stops the descent (project defaults to the solution root). Virtual folders are never materialised on disk. The default is always editable.
 
 ## Example dialogue
 

@@ -15,4 +15,4 @@ TESTING.md
 .gitignore
 **/*.ts
 **/*.map
-out/regex.test.js
+out/*.test.js

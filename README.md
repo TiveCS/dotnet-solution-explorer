@@ -2,11 +2,14 @@
 
 A lightweight Visual Studio-style **Solution Explorer** for VS Code, built for .NET developers who want the `.sln`/`.csproj` tree without the weight of a full language server.
 
-Made because the C# Dev Kit's solution tooling is being sunset and existing extensions are slow to load and can degrade IntelliSense / format-on-save. This extension does **pure XML parsing in-process** — no `dotnet` CLI spawns, no OmniSharp/Roslyn dependency, no watching of source files.
+Made because the C# Dev Kit's solution tooling is being sunset and existing extensions are slow to load and can degrade IntelliSense / format-on-save. The tree loads and renders by **pure XML parsing in-process** — no OmniSharp/Roslyn dependency, no watching of source files, and no `dotnet` CLI on the load or idle path. (The optional **New Project** action shells out to `dotnet new` only when you explicitly invoke it.)
 
 ## Features
 
 - **Logical solution tree** — mirrors the `.sln`/`.csproj` structure (Solution Folders, Projects, Folders, Files), not the raw filesystem.
+- **Open from anywhere** — a single `.sln` loads automatically; otherwise a welcome panel offers **Open Solution File** or **Open Folder** (scans a directory for `.sln`, without adding it as a workspace root).
+- **Solution folder management** — create (at root or nested), rename, and remove Solution Folders; reparent Projects/Solution Folders by drag-drop or "Move to Solution Folder…".
+- **Add projects** — **New Project** (scaffolds via `dotnet new`, then adds it to the `.sln`) and **Add Existing Project** (references a `.csproj`/`.fsproj`/`.vbproj` already on disk).
 - **Both project formats** — SDK-style (glob-based) and legacy (explicit `<Compile>`/`<Content>`) projects.
 - **Blazing-fast load** — the solution tree renders immediately from the `.sln`; project files are parsed in the background so expansion is instant.
 - **Dedicated activity-bar panel** — separate from the file Explorer, no Outline/Timeline clutter.
@@ -48,7 +51,7 @@ Symbol extraction uses a regex provider by default (zero language-server depende
 npm install
 npm run build      # bundle with esbuild
 npm run watch      # rebuild on change
-npm test           # run the regex provider unit tests
+npm test           # run the regex provider + .sln writer unit tests
 ```
 
 Press **F5** (or Run → Start Debugging) to launch the Extension Development Host, then open a folder containing a `.sln`.

@@ -59,6 +59,37 @@ export async function readDirRecursive(dir: string): Promise<DirScan> {
   return { files, dirs };
 }
 
+/**
+ * Recursively find all `.sln` files under a directory, applying the standard
+ * obj/bin/.git/node_modules exclusions. Used to scan an arbitrary picked folder
+ * (which may live outside the workspace, where `workspace.findFiles` is unreliable).
+ */
+export async function findSlnFiles(dir: string, limit = 50): Promise<string[]> {
+  const found: string[] = [];
+
+  async function recurse(current: string): Promise<void> {
+    if (found.length >= limit) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (found.length >= limit) return;
+      if (entry.isDirectory()) {
+        if (SDK_EXCLUDES.has(entry.name) || entry.name.startsWith('.')) continue;
+        await recurse(path.join(current, entry.name));
+      } else if (entry.name.toLowerCase().endsWith('.sln')) {
+        found.push(path.join(current, entry.name));
+      }
+    }
+  }
+
+  await recurse(dir);
+  return found;
+}
+
 export interface FolderTree {
   folders: Map<string, FolderTree>;
   files: string[];

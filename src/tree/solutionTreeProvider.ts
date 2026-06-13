@@ -1,6 +1,7 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { SlnData } from '../parser/slnParser';
+import { SlnData, parseSlnFile } from '../parser/slnParser';
 import { ProjectData, parseProjectFile } from '../parser/csprojParser';
 import { buildFolderTree, FolderTree, resolveFromDir } from '../utils/pathUtils';
 import {
@@ -39,6 +40,21 @@ export class SolutionTreeProvider
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  /**
+   * Re-parse the current .sln from disk and reload the tree. Used after we edit
+   * the .sln ourselves, since the `**​/*.sln` watcher only fires for solutions
+   * inside the workspace (a solution opened via Open Folder may be outside it).
+   */
+  async reloadFromDisk(): Promise<void> {
+    if (!this.slnData) return;
+    try {
+      const content = await fs.promises.readFile(this.slnData.slnPath, 'utf-8');
+      this.load(parseSlnFile(content, this.slnData.slnPath));
+    } catch {
+      // file gone or unreadable — leave the current tree in place
+    }
   }
 
   refreshNode(node: TreeNode): void {
@@ -146,14 +162,32 @@ export class SolutionTreeProvider
   }
 
   getParent(node: TreeNode): TreeNode | undefined {
+    if (!this.slnData) return undefined;
     if (node.kind === NodeKind.Solution) return undefined;
-    if (node.kind === NodeKind.SolutionFolder) {
-      const proj = this.slnData?.projects.get(node.guid);
-      if (!proj?.parentGuid) return { kind: NodeKind.Solution, slnData: this.slnData! };
-      const parent = this.slnData!.projects.get(proj.parentGuid)!;
-      return { kind: NodeKind.SolutionFolder, guid: proj.parentGuid, name: parent.name, slnData: this.slnData! };
+    if (node.kind === NodeKind.SolutionFolder || (node.kind === NodeKind.Project && !node.pinned)) {
+      const proj = this.slnData.projects.get(node.guid);
+      if (!proj?.parentGuid) return { kind: NodeKind.Solution, slnData: this.slnData };
+      const parent = this.slnData.projects.get(proj.parentGuid);
+      if (!parent) return { kind: NodeKind.Solution, slnData: this.slnData };
+      return { kind: NodeKind.SolutionFolder, guid: proj.parentGuid, name: parent.name, slnData: this.slnData };
     }
     return undefined;
+  }
+
+  /** Build the main-tree ProjectNode for a GUID, if present, for reveal. */
+  projectNodeByGuid(guid: string): ProjectNode | undefined {
+    if (!this.slnData) return undefined;
+    const p = this.slnData.projects.get(guid);
+    if (!p || p.isSolutionFolder) return undefined;
+    const projectPath = resolveFromDir(p.relativePath, this.slnData.slnDir);
+    return {
+      kind: NodeKind.Project,
+      guid,
+      name: p.name,
+      projectPath,
+      projectData: this.projectCache.get(projectPath),
+      showExcluded: this.showExcludedSet.has(projectPath),
+    };
   }
 
   // ── Drag and Drop ─────────────────────────────────────────────────────────
@@ -161,10 +195,15 @@ export class SolutionTreeProvider
   handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {
     const files = source.filter((n): n is FileNode => n.kind === NodeKind.File).map(n => n.filePath);
     const folders = source.filter((n): n is FolderNode => n.kind === NodeKind.Folder).map(n => n.folderPath);
-    if (files.length > 0 || folders.length > 0) {
+    // Projects and Solution Folders carry a GUID — dragging them reparents in the .sln.
+    const slnGuids = source
+      .filter((n): n is ProjectNode | SolutionFolderNode =>
+        (n.kind === NodeKind.Project && !(n as ProjectNode).pinned) || n.kind === NodeKind.SolutionFolder)
+      .map(n => n.guid);
+    if (files.length > 0 || folders.length > 0 || slnGuids.length > 0) {
       dataTransfer.set(
         'application/vnd.code.tree.solutionexplorer',
-        new vscode.DataTransferItem({ files, folders })
+        new vscode.DataTransferItem({ files, folders, slnGuids })
       );
     }
   }
@@ -174,9 +213,21 @@ export class SolutionTreeProvider
     const item = dataTransfer.get('application/vnd.code.tree.solutionexplorer');
     if (!item) return;
 
-    const payload = item.value as { files?: string[]; folders?: string[] };
+    const payload = item.value as { files?: string[]; folders?: string[]; slnGuids?: string[] };
     const filePaths: string[] = payload.files ?? [];
     const folderPaths: string[] = payload.folders ?? [];
+    const slnGuids: string[] = payload.slnGuids ?? [];
+
+    // Dropping a Project / Solution Folder onto a Solution Folder or the Solution
+    // root reparents it in the .sln (no files move on disk).
+    if (slnGuids.length > 0 && (target.kind === NodeKind.SolutionFolder || target.kind === NodeKind.Solution)) {
+      const parentGuid = target.kind === NodeKind.SolutionFolder ? target.guid : undefined;
+      const { reparentEntry } = await import('../operations/solutionFolderOperations');
+      for (const guid of slnGuids) {
+        await reparentEntry(guid, parentGuid, this);
+      }
+      return;
+    }
 
     let targetProjectNode: ProjectNode | undefined;
     let targetDir: string | undefined;

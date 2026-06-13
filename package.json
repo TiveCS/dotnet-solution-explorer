@@ -2,7 +2,7 @@
   "name": "csharp-solution-explorer",
   "displayName": "Rehoukrel Solution Explorer",
   "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "RehoukrelStudio",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TiveCS/dotnet-solution-explorer.git" },
@@ -32,6 +32,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "dotnetSolutionExplorer",
+        "when": "!solutionExplorer.hasSolution",
+        "contents": "No solution is open.\n[Open Solution File](command:solutionExplorer.openSln)\n[Open Folder](command:solutionExplorer.openFolder)\nA solution loads automatically when a single .sln is found in the workspace. \"Open Folder\" scans a directory for .sln files."
+      }
+    ],
     "commands": [
       {
         "command": "solutionExplorer.refresh",
@@ -42,6 +49,41 @@
       {
         "command": "solutionExplorer.openSln",
         "title": "Open Solution File...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.openFolder",
+        "title": "Open Folder...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.newSolutionFolder",
+        "title": "New Solution Folder...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.renameSolutionFolder",
+        "title": "Rename Solution Folder...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.deleteSolutionFolder",
+        "title": "Remove Solution Folder",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.moveToSolutionFolder",
+        "title": "Move to Solution Folder...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.newProject",
+        "title": "New Project...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.addExistingProject",
+        "title": "Add Existing Project...",
         "category": "Solution Explorer"
       },
       {
@@ -161,6 +203,36 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "solutionExplorer.newSolutionFolder",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(solution|solutionFolder)$/",
+          "group": "0_new@1"
+        },
+        {
+          "command": "solutionExplorer.newProject",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(solution|solutionFolder)$/",
+          "group": "0_new@2"
+        },
+        {
+          "command": "solutionExplorer.addExistingProject",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(solution|solutionFolder)$/",
+          "group": "0_new@3"
+        },
+        {
+          "command": "solutionExplorer.renameSolutionFolder",
+          "when": "view == dotnetSolutionExplorer && viewItem == solutionFolder",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "solutionExplorer.deleteSolutionFolder",
+          "when": "view == dotnetSolutionExplorer && viewItem == solutionFolder",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "solutionExplorer.moveToSolutionFolder",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject|solutionFolder)$/",
+          "group": "3_project@5"
+        },
         {
           "command": "solutionExplorer.addFile",
           "when": "view == dotnetSolutionExplorer && viewItem =~ /^(pinnedProject|project|folder|file)/",
@@ -317,7 +389,7 @@
   "scripts": {
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "test": "esbuild test/regex.test.ts --bundle --platform=node --outfile=out/regex.test.js && node out/regex.test.js",
+    "test": "esbuild test/regex.test.ts --bundle --platform=node --outfile=out/regex.test.js && node out/regex.test.js && esbuild test/slnWriter.test.ts --bundle --platform=node --outfile=out/slnWriter.test.js && node out/slnWriter.test.js",
     "package": "vsce package",
     "vscode:prepublish": "node esbuild.js --production"
   },

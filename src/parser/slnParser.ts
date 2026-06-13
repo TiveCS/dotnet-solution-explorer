@@ -84,13 +84,4 @@ export function parseSlnFile(content: string, slnPath: string): SlnData {
   return { slnPath, slnDir, solutionName, projects, rootGuids };
 }
 
-export function removeProjectFromSln(content: string, guid: string): string {
-  const esc = guid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  content = content.replace(
-    new RegExp(`^Project\\("[^"]*"\\)\\s*=\\s*"[^"]*",\\s*"[^"]*",\\s*"${esc}"[\\s\\S]*?^EndProject\\r?\\n?`, 'mi'),
-    ''
-  );
-  content = content.replace(new RegExp(`^[ \\t]*${esc}[ \\t]*=[ \\t]*\\{[^}]+\\}\\r?\\n?`, 'gim'), '');
-  content = content.replace(new RegExp(`^[ \\t]*\\{[^}]+\\}[ \\t]*=[ \\t]*${esc}\\r?\\n?`, 'gim'), '');
-  return content;
-}
+export { removeEntry as removeProjectFromSln } from './slnWriter';

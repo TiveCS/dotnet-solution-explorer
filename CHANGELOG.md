@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2
+
+### Added
+- **Welcome view**: when no `.sln` is detected, the panel no longer pops a file dialog (which left you stuck if you cancelled). It shows **Open Solution File** and **Open Folder** actions instead. A single `.sln` in the workspace still loads automatically.
+- **Open Folder**: pick any directory and it is scanned (recursively, skipping `obj`/`bin`/`node_modules`) for `.sln` files — 1 loads, many show a picker. The folder is only scanned, not added as a workspace root.
+- **Solution Folders**: create (right-click the Solution or a Solution Folder; nesting supported), rename, and remove. Removing a folder cascade-removes its contents from the solution (project files are never deleted) after a confirmation showing how many projects are affected.
+- **Reparent**: move a Project or Solution Folder between Solution Folders (or to the root) via right-click **Move to Solution Folder…** or by dragging it onto a Solution Folder / the Solution root. Rewrites the `.sln` only; no files move on disk.
+- **New Project**: scaffolds with `dotnet new` (templates discovered from `dotnet new list`), then adds the project to the `.sln`. Requires the .NET SDK on `PATH`; shows a clear message if it is missing.
+- **Add Existing Project**: reference a `.csproj`/`.fsproj`/`.vbproj` already on disk, optionally nested under a Solution Folder.
+- **Keyboard parity**: `F2` (rename) now also renames Solution Folders, and `Del` (delete) now acts on Solution Folders and Projects too, not just files/folders — the tree behaves like a regular file tree. `Del` on a Project opens the existing remove/delete-files prompt. (Project *rename* is intentionally not included — see below.)
+
+### Changed
+- `.sln` edits (add/rename/remove/reparent) use targeted string-surgery that preserves the rest of the file byte-for-byte. See [ADR-0002](docs/adr/0002-sln-string-surgery-writes.md) and [ADR-0003](docs/adr/0003-dotnet-new-for-scaffolding.md).
+
 ## 0.1.1
 
 ### Fixed
