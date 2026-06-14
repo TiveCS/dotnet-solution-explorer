@@ -4,6 +4,16 @@ export interface FileTemplate {
   extension: string;
   content: string;
   description?: string;
+  /**
+   * Output filename pattern with a `${NAME}` slot, e.g. `${NAME}Command.cs`.
+   * Present only on custom (folder/file) templates; doubles as a naming rule.
+   * Built-ins have no pattern — their filename is the stem + extension.
+   */
+  namePattern?: string;
+  /** Custom templates run through the hybrid snippet engine; built-ins do not. */
+  isCustom?: boolean;
+  /** Absolute path to the template's folder on disk (for Manage Templates). */
+  sourceDir?: string;
 }
 
 export const BUILTIN_TEMPLATES: FileTemplate[] = [

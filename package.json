@@ -2,7 +2,7 @@
   "name": "csharp-solution-explorer",
   "displayName": "Rehoukrel Solution Explorer",
   "description": "Lightweight Visual Studio-style Solution Explorer for .NET — pure XML parse, zero language-server coupling",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "RehoukrelStudio",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/TiveCS/dotnet-solution-explorer.git" },
@@ -164,6 +164,31 @@
         "category": "Solution Explorer"
       },
       {
+        "command": "solutionExplorer.saveAsTemplate",
+        "title": "Save as Template...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.newTemplate",
+        "title": "New Template...",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.manageTemplates",
+        "title": "Manage Templates",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.toggleSearchScope",
+        "title": "Include in / Exclude from Symbol Search",
+        "category": "Solution Explorer"
+      },
+      {
+        "command": "solutionExplorer.setSearchScope",
+        "title": "Set Symbol Search Scope...",
+        "category": "Solution Explorer"
+      },
+      {
         "command": "solutionExplorer.revealInOS",
         "title": "Reveal in File Explorer",
         "category": "Solution Explorer"
@@ -200,6 +225,21 @@
           "command": "solutionExplorer.revealActiveFile",
           "when": "view == dotnetSolutionExplorer",
           "group": "navigation@2"
+        },
+        {
+          "command": "solutionExplorer.setSearchScope",
+          "when": "view == dotnetSolutionExplorer && solutionExplorer.hasSolution",
+          "group": "9_scope@1"
+        },
+        {
+          "command": "solutionExplorer.newTemplate",
+          "when": "view == dotnetSolutionExplorer",
+          "group": "8_template@1"
+        },
+        {
+          "command": "solutionExplorer.manageTemplates",
+          "when": "view == dotnetSolutionExplorer",
+          "group": "8_template@2"
         }
       ],
       "view/item/context": [
@@ -259,6 +299,11 @@
           "group": "2_edit@3"
         },
         {
+          "command": "solutionExplorer.saveAsTemplate",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^file/",
+          "group": "6_template@1"
+        },
+        {
           "command": "solutionExplorer.openProjectFile",
           "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@1"
@@ -267,6 +312,16 @@
           "command": "solutionExplorer.toggleExcludedFiles",
           "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject)$/",
           "group": "3_project@2"
+        },
+        {
+          "command": "solutionExplorer.toggleSearchScope",
+          "when": "view == dotnetSolutionExplorer && viewItem =~ /^(project|pinnedProject|solutionFolder)$/",
+          "group": "3_project@6"
+        },
+        {
+          "command": "solutionExplorer.setSearchScope",
+          "when": "view == dotnetSolutionExplorer && viewItem == solution",
+          "group": "5_scope@1"
         },
         {
           "command": "solutionExplorer.pinProject",
@@ -361,7 +416,7 @@
         "solutionExplorer.customTemplatesPath": {
           "type": "string",
           "default": "",
-          "description": "Path to directory containing custom file templates (VS Code snippet syntax)."
+          "description": "Secondary directory of custom file templates (flat files, VS Code snippet syntax). The primary source is the extension's global storage — use \"New Template\" / \"Manage Templates\". Global templates take precedence on id conflicts."
         },
         "solutionExplorer.autoRevealActiveFile": {
           "type": "boolean",

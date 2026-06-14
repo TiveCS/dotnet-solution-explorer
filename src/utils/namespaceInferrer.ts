@@ -40,6 +40,41 @@ export function buildFileContent(
   ).replace(/\n$/, '\n}');
 }
 
+/**
+ * Forgive a bare `$NAME` (no braces) by promoting it to `${NAME}` — a natural
+ * mistake since the namespace slot is the brace-less `$NAMESPACE`. Never touches
+ * `$NAMESPACE` (lookahead) or an already-braced `${NAME}` (a `{` follows the `$`).
+ */
+export function normalizeNameSlots(text: string): string {
+  return text.replace(/\$NAME(?!SPACE)/g, '${NAME}');
+}
+
+/**
+ * Hybrid slot engine (ADR-0004): pre-resolve the two slots VS Code snippets
+ * cannot express — `$NAMESPACE` (inferred) and `${NAME}` (the stem, distinct
+ * from the filename) — and apply the namespace-style transform. The returned
+ * string is then handed to `vscode.SnippetString` + `insertSnippet`, so native
+ * snippet features (`$TM_FILENAME_BASE`, tab stops, choices, `$CURRENT_YEAR`)
+ * resolve in the editor and the cursor lands on the first tab stop.
+ */
+export function resolveCustomSlots(
+  content: string,
+  namespace: string,
+  stem: string,
+  style: NamespaceStyle,
+): string {
+  let body = normalizeNameSlots(content)
+    .replace(/\$\{NAME\}/g, stem)
+    .replace(/\$NAMESPACE/g, namespace);
+
+  if (style === 'block_scoped') {
+    body = body
+      .replace(/^namespace (.+);$/m, (_, ns) => `namespace ${ns}\n{`)
+      .replace(/\n$/, '\n}');
+  }
+  return body;
+}
+
 function sanitizeSegment(segment: string): string {
   return segment.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^(\d)/, '_$1');
 }

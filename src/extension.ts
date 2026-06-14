@@ -16,6 +16,8 @@ import {
 } from './operations/shellCommands';
 import { SymbolIndex } from './symbols/symbolIndex';
 import { runSymbolSearch } from './symbols/symbolSearch';
+import { setTemplateStorage } from './templates/templateManager';
+import { saveAsTemplate, newTemplate, manageTemplates } from './operations/templateOperations';
 
 let provider: SolutionTreeProvider;
 let treeView: vscode.TreeView<unknown>;
@@ -24,6 +26,7 @@ let symbolIndex: SymbolIndex;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   provider = new SolutionTreeProvider(context);
   symbolIndex = new SymbolIndex(() => provider.getAllIndexableFiles(), undefined, context.globalStorageUri);
+  setTemplateStorage(context.globalStorageUri);
 
   treeView = vscode.window.createTreeView('dotnetSolutionExplorer', {
     treeDataProvider: provider,
@@ -168,6 +171,8 @@ function setupWatcher(context: vscode.ExtensionContext): void {
 function setupSymbolIndexUpkeep(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(doc => {
+      // Don't pull files from a project the user excluded from Symbol Search.
+      if (provider.isPathOutOfScope(doc.uri.fsPath)) return;
       void symbolIndex.reindexFile(doc.uri.fsPath);
     }),
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -311,9 +316,133 @@ function registerCommands(context: vscode.ExtensionContext): void {
     }
   });
 
+  // Symbol Search scope toggle. Works on projects and Solution Folders (which
+  // cascade to every project under them, recursively). Multi-select aware
+  // (Ctrl+click many, right-click one); the clicked node sets the direction.
+  reg('solutionExplorer.toggleSearchScope', async (...args: unknown[]) => {
+    const [node, rawAll] = args;
+    const isScopeNode = (n: unknown) => isProjectNode(n) || isSolutionFolderNode(n);
+    if (!isScopeNode(node)) {
+      vscode.window.showWarningMessage('Toggle Symbol Search Scope: right-click a project or solution folder.');
+      return;
+    }
+    const slnData = provider.getSlnData();
+    if (!slnData) return;
+    const clickedGuid = (node as { guid: string }).guid;
+
+    // Batch = multi-select payload (or treeView.selection fallback); keyboard/single
+    // case omits the array, so fall back to the clicked node.
+    const fromArg = Array.isArray(rawAll) ? rawAll.filter(isScopeNode) : [];
+    const selection = treeView.selection.filter(isScopeNode);
+    let batch = fromArg.length > 0 ? fromArg : selection;
+    if (!batch.some(n => (n as { guid: string }).guid === clickedGuid)) batch = [node];
+
+    // Expand Solution Folders to their descendant project GUIDs; collect into a set.
+    const targets = new Set<string>();
+    for (const n of batch) {
+      if (isProjectNode(n)) targets.add(n.guid);
+      else collectProjectGuids(slnData, (n as { guid: string }).guid, targets);
+    }
+    if (targets.size === 0) {
+      vscode.window.showInformationMessage('No projects in the selection to change.');
+      return;
+    }
+
+    // Direction from the clicked node: a project flips its own state; a Solution
+    // Folder excludes unless all its descendants are already excluded (then includes).
+    let targetExcluded: boolean;
+    if (isProjectNode(node)) {
+      targetExcluded = !provider.scope.isExcluded(slnData.slnPath, node.guid);
+    } else {
+      const descend = collectProjectGuids(slnData, clickedGuid, new Set<string>());
+      targetExcluded = ![...descend].every(g => provider.scope.isExcluded(slnData.slnPath, g));
+    }
+
+    try {
+      for (const g of targets) {
+        if (targetExcluded) await provider.scope.exclude(slnData.slnPath, g);
+        else await provider.scope.include(slnData.slnPath, g);
+      }
+      // Rebuild the index on next search from the filtered file source (disk cache
+      // keeps this cheap). Simpler and more reliable than incremental in/out.
+      symbolIndex.invalidate();
+      provider.refresh();
+      const verb = targetExcluded ? 'excluded from' : 'included in';
+      vscode.window.showInformationMessage(
+        targets.size === 1
+          ? `1 project ${verb} Symbol Search.`
+          : `${targets.size} projects ${verb} Symbol Search.`,
+      );
+    } catch (err) {
+      vscode.window.showErrorMessage(`Toggle Symbol Search Scope failed: ${err}`);
+    }
+  });
+
+  // Bulk scope editor: multi-select quick-pick of all projects (checked = searched).
+  reg('solutionExplorer.setSearchScope', async () => {
+    const slnData = provider.getSlnData();
+    if (!slnData) {
+      vscode.window.showInformationMessage('No solution loaded.');
+      return;
+    }
+    const projects = [...slnData.projects].filter(([, p]) => {
+      if (p.isSolutionFolder) return false;
+      const ext = path.extname(p.relativePath).toLowerCase();
+      return ext === '.csproj' || ext === '.fsproj' || ext === '.vbproj';
+    });
+    if (projects.length === 0) {
+      vscode.window.showInformationMessage('No searchable projects in this solution.');
+      return;
+    }
+    const prevExcluded = provider.scope.getExcluded(slnData.slnPath);
+    const items = projects.map(([guid, p]) => ({
+      label: p.name,
+      description: p.relativePath,
+      guid,
+      picked: !prevExcluded.has(guid),
+    }));
+    const picked = await vscode.window.showQuickPick(items, {
+      canPickMany: true,
+      title: 'Symbol Search Scope',
+      placeHolder: 'Checked projects are searched (Alt+P). Uncheck to exclude.',
+    });
+    if (!picked) return; // cancelled — leave scope unchanged
+
+    const includedGuids = new Set(picked.map(i => i.guid));
+    const newExcluded = projects.map(([guid]) => guid).filter(guid => !includedGuids.has(guid));
+    await provider.scope.setExcluded(slnData.slnPath, newExcluded);
+
+    // Rebuild the index on next search from the filtered file source.
+    symbolIndex.invalidate();
+    provider.refresh();
+    vscode.window.showInformationMessage(
+      `Symbol Search scope updated: ${includedGuids.size} of ${projects.length} projects searched.`,
+    );
+  });
+
   reg('solutionExplorer.openProjectFile', async (node: unknown) => {
     if (!isProjectNode(node)) return;
     await openProjectFile(node);
+  });
+
+  // ── Custom template authoring ──────────────────────────────────────────────
+  reg('solutionExplorer.saveAsTemplate', async (node: unknown) => {
+    if (!isFileNode(node)) return;
+    try {
+      await saveAsTemplate(node);
+    } catch (err) { vscode.window.showErrorMessage(`Save as Template failed: ${err}`); }
+  });
+
+  reg('solutionExplorer.newTemplate', async () => {
+    try {
+      await newTemplate();
+    } catch (err) { vscode.window.showErrorMessage(`New Template failed: ${err}`); }
+  });
+
+  reg('solutionExplorer.manageTemplates', async () => {
+    try {
+      await manageTemplates();
+    } catch (err) { vscode.window.showErrorMessage(`Manage Templates failed: ${err}`); }
   });
 
   reg('solutionExplorer.revealInOS', async (node: unknown) => {
@@ -419,6 +548,22 @@ function resolveAddTarget(node: unknown): ProjectNode | FolderNode | undefined {
     return parentFolder;
   }
   return undefined;
+}
+
+/** Recursively collect the project GUIDs under a node GUID (a Solution Folder expands to its descendants; a project resolves to itself). */
+function collectProjectGuids(
+  slnData: { projects: Map<string, { isSolutionFolder?: boolean; childGuids?: string[] }> },
+  guid: string,
+  out: Set<string>,
+): Set<string> {
+  const p = slnData.projects.get(guid);
+  if (!p) return out;
+  if (p.isSolutionFolder) {
+    for (const child of p.childGuids ?? []) collectProjectGuids(slnData, child, out);
+  } else {
+    out.add(guid);
+  }
+  return out;
 }
 
 function isSolutionFolderNode(node: unknown): node is SolutionFolderNode {

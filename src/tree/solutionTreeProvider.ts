@@ -10,6 +10,7 @@ import {
   nodeId,
 } from './nodes';
 import { PinStore } from './pinStore';
+import { ScopeStore } from '../symbols/scopeStore';
 
 export class SolutionTreeProvider
   implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
@@ -24,9 +25,11 @@ export class SolutionTreeProvider
   private projectCache = new Map<string, ProjectData>();
   private showExcludedSet = new Set<string>();
   readonly pins: PinStore;
+  readonly scope: ScopeStore;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.pins = new PinStore(context.globalState);
+    this.scope = new ScopeStore(context.globalState);
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -76,10 +79,12 @@ export class SolutionTreeProvider
    */
   async getAllIndexableFiles(): Promise<{ filePath: string; project?: string }[]> {
     if (!this.slnData) return [];
+    const excluded = this.scope.getExcluded(this.slnData.slnPath);
     const out: { filePath: string; project?: string }[] = [];
     const seen = new Set<string>();
-    for (const [, proj] of this.slnData.projects) {
+    for (const [guid, proj] of this.slnData.projects) {
       if (proj.isSolutionFolder) continue;
+      if (excluded.has(guid)) continue; // out of Symbol Search scope
       const projectPath = resolveFromDir(proj.relativePath, this.slnData.slnDir);
       const ext = path.extname(projectPath).toLowerCase();
       if (ext !== '.csproj' && ext !== '.fsproj' && ext !== '.vbproj') continue;
@@ -95,6 +100,20 @@ export class SolutionTreeProvider
       }
     }
     return out;
+  }
+
+  /** True if the file lives under a project the user has excluded from Symbol Search. */
+  isPathOutOfScope(filePath: string): boolean {
+    if (!this.slnData) return false;
+    const excluded = this.scope.getExcluded(this.slnData.slnPath);
+    if (excluded.size === 0) return false;
+    for (const guid of excluded) {
+      const proj = this.slnData.projects.get(guid);
+      if (!proj || proj.isSolutionFolder) continue;
+      const projectDir = path.dirname(resolveFromDir(proj.relativePath, this.slnData.slnDir));
+      if (filePath.startsWith(projectDir + path.sep) || filePath.startsWith(projectDir + '/')) return true;
+    }
+    return false;
   }
 
   /** The owning project name for a file path, if it falls under a known project. */
@@ -382,9 +401,13 @@ export class SolutionTreeProvider
       ? this.pins.isPinned(this.slnData.slnPath, node.guid)
       : false);
     item.contextValue = isPinned ? 'pinnedProject' : 'project';
-    item.iconPath = new vscode.ThemeIcon('project');
-    item.description = path.extname(node.projectPath).slice(1);
-    item.tooltip = node.projectPath;
+    const ext = path.extname(node.projectPath).slice(1);
+    const outOfScope = this.slnData ? this.scope.isExcluded(this.slnData.slnPath, node.guid) : false;
+    item.iconPath = new vscode.ThemeIcon(outOfScope ? 'circle-slash' : 'project');
+    item.description = outOfScope ? `${ext} · search off` : ext;
+    item.tooltip = outOfScope
+      ? `${node.projectPath}\nExcluded from Symbol Search (Alt+P)`
+      : node.projectPath;
     item.id = nodeId(node);
     return item;
   }

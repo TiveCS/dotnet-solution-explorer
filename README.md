@@ -14,11 +14,11 @@ Made because the C# Dev Kit's solution tooling is being sunset and existing exte
 - **Blazing-fast load** — the solution tree renders immediately from the `.sln`; project files are parsed in the background so expansion is instant.
 - **Dedicated activity-bar panel** — separate from the file Explorer, no Outline/Timeline clutter.
 - **Symbol search (`Alt+P`)** — Ctrl+P-style fuzzy search across **C# type names**, not just file names. Find `AuditFindingQueryParams` even when it lives in `AuditFindingViewModel.cs`, with live preview and jump-to-type.
+- **Search scope** — right-click a Project (or a Solution Folder, which cascades) → **Include in / Exclude from Symbol Search**; multi-select aware. Or **Set Symbol Search Scope…** for a multi-select of all projects. Excluded projects are never indexed and show a slashed icon. Scope is personal (stored per-solution, not committed).
 - **File operations** — add file (template-aware), add folder, rename (F2), delete (recycle bin), move between projects (drag-drop or menu) with namespace updates.
-- **Templates** — Class, Interface, Record, Enum, Abstract Class, Razor Component, Razor Page, Razor PageModel, Blank, plus user-defined templates (VS Code snippet syntax). Naming conventions auto-select a template (`I*` → Interface).
+- **Templates** — built-ins (Class, Interface, Record, Enum, Abstract Class, Razor Component/Page/PageModel, Blank) **plus custom folder templates**: one folder = one template whose `${NAME}` filename pattern derives the output name and doubles as a naming rule (`${NAME}Command.cs` + stem `Approve` → `ApproveCommand.cs`). Custom templates run through a hybrid snippet engine (`$NAMESPACE`/`${NAME}` pre-resolved, then native VS Code snippet tab stops/choices/`$TM_FILENAME_BASE`). Author with **Save as Template** / **New Template** / **Manage Templates**.
 - **Namespace inference** — `<RootNamespace>` + folder path; file-scoped vs block-scoped follows `.editorconfig`.
 - **Project menu** — Open `.csproj`, Reveal in File Explorer, Open in Integrated Terminal, Copy Path / Relative Path.
-- **Git decorations** on tree nodes (via VS Code's SCM API — no language server).
 
 ## Symbol search
 
@@ -30,6 +30,7 @@ Made because the C# Dev Kit's solution tooling is being sunset and existing exte
 | Freshness | Re-indexes a file when you **save** it (no `.cs` filesystem watcher) |
 | Navigate | Live preview as you arrow (toggle off for low-spec machines) |
 | Open | `Enter` opens the file, cursor centred on the type name; `Esc` restores your editor |
+| Scope | Per-project include/exclude (Solution Folders cascade); excluded projects are never indexed |
 
 Symbol extraction uses a regex provider by default (zero language-server dependency — see [ADR-0001](docs/adr/0001-regex-symbol-provider.md)). A `languageServer` provider option is reserved for the future.
 
@@ -40,7 +41,7 @@ Symbol extraction uses a regex provider by default (zero language-server depende
 | `solutionExplorer.namingConventions` | `I* → Interface`, … | Filename pattern → template rules |
 | `solutionExplorer.defaultTemplate` | `Class` | Template when no naming rule matches |
 | `solutionExplorer.namespaceStyle` | `auto` | `auto` (read `.editorconfig`) / `file-scoped` / `block-scoped` |
-| `solutionExplorer.customTemplatesPath` | `""` | Directory of custom template files |
+| `solutionExplorer.customTemplatesPath` | `""` | Secondary flat directory of custom templates (primary source is the global storage folder — use **New / Manage Templates**) |
 | `solutionExplorer.autoRevealActiveFile` | `false` | Auto-reveal active editor file in the tree |
 | `solutionExplorer.symbolProvider` | `regex` | `regex` / `languageServer` (latter falls back to regex) |
 | `solutionExplorer.symbolSearch.livePreview` | `true` | Live-preview results while navigating |
